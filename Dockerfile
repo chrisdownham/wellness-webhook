@@ -1,21 +1,21 @@
-# 1. Use Playwright’s official Python image (includes all browser deps)
-FROM mcr.microsoft.com/playwright/python:latest
+# Use the official Playwright image matching your pip package version
+FROM mcr.microsoft.com/playwright/python:v1.52.0-jammy
 
-# 2. Set working directory
+# Set working directory
 WORKDIR /app
 
-# 3. Copy in your app + deps files
+# Install Python dependencies
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4. Copy the rest of your code
-COPY app.py start.sh railway.json ./
+# Copy application code
+COPY app.py start.sh ./
 
-# 5. Install browsers (already baked into the base image, but safe)
+# Install Playwright browsers
 RUN playwright install
 
-# 6. Expose port (Railway uses $PORT env variable at runtime)
+# Expose the port your Flask app will run on
 EXPOSE 5000
 
-# 7. Start your app
+# Launch script
 CMD ["bash", "start.sh"]
