@@ -3,8 +3,8 @@ import traceback
 from flask import Flask, request, jsonify
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-# Credentials stored in Railway environment variables
-WL_EMAIL = os.environ["WL_EMAIL"]
+# Pull these in from Railway’s Environment Variables
+WL_EMAIL    = os.environ["WL_EMAIL"]
 WL_PASSWORD = os.environ["WL_PASSWORD"]
 
 app = Flask(__name__)
@@ -23,18 +23,20 @@ def handle_new_lead():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # 1) Login to Staff portal
+            # 1) Login to your studio's custom path (no hard-coded semicolon!)
             page.goto(
-                "https://www.wellnessliving.com/login",
+                "https://www.wellnessliving.com/login/r1se_yoga",
                 timeout=60000,
                 wait_until="networkidle"
             )
-            page.fill('input[name="username"]', WL_EMAIL)
-            page.fill('input[name="password"]', WL_PASSWORD)
-            page.click('button:has-text("Sign in")')
+
+            # Fill by visible labels
+            page.get_by_label("Email").fill(WL_EMAIL)
+            page.get_by_label("Password").fill(WL_PASSWORD)
+            page.get_by_role("button", name="Sign in").click()
             page.wait_for_load_state("networkidle", timeout=60000)
 
-            # 2) Navigate to Add New Client form
+            # 2) Navigate to the staff Add Client form
             page.goto(
                 "https://www.wellnessliving.com/rs/lead-add.html?k_business=314287&k_skin=202951",
                 timeout=60000,
@@ -42,26 +44,21 @@ def handle_new_lead():
             )
             page.wait_for_load_state("domcontentloaded", timeout=30000)
 
-            # 3) Fill out the form by placeholder
+            # 3) Fill out the “Add Client” modal
             page.get_by_placeholder("First name").fill(first_name)
             page.get_by_placeholder("Last name").fill(last_name)
             page.get_by_placeholder("Email").fill(email)
             page.get_by_placeholder("Cell phone").fill(phone)
-
-            # 4) Optional Redemption code
             if redemption:
                 page.get_by_placeholder("Redemption code").fill(redemption)
 
-            # 5) Select Home location
+            # 4) Select “R1SE @ Kelham” for Home location
             page.get_by_role("combobox", name="Home location") \
                 .select_option(label="R1SE @ Kelham")
 
-            # 6) Submit
+            # 5) Submit by clicking “Add”
             page.get_by_role("button", name="Add").click()
-
-            # Wait briefly to ensure submission
             page.wait_for_timeout(2000)
-
             browser.close()
 
         return jsonify({"status": "success", "submitted": email}), 200
@@ -69,7 +66,7 @@ def handle_new_lead():
     except PWTimeout as e:
         print("❌ Timeout during automation:", e)
         traceback.print_exc()
-        return jsonify({"status": "error", "message": "Timeout during navigation or fill"}), 504
+        return jsonify({"status": "error", "message": "Timeout"}), 504
 
     except Exception as e:
         print("❌ Unexpected error:", e)
