@@ -3,7 +3,7 @@ import traceback
 from flask import Flask, request, jsonify
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-# Pull these in from Railway’s Environment Variables
+# ← Store these in Railway env vars (Settings → Variables)
 WL_EMAIL    = os.environ["WL_EMAIL"]
 WL_PASSWORD = os.environ["WL_PASSWORD"]
 
@@ -23,28 +23,29 @@ def handle_new_lead():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # 1) Login to your studio's custom path (no hard-coded semicolon!)
+            # 1) Login to custom staff login
             page.goto(
                 "https://www.wellnessliving.com/login/r1se_yoga",
-                timeout=60000,
-                wait_until="networkidle"
+                timeout=60000, wait_until="networkidle"
             )
-
-            # Fill by visible labels
             page.get_by_label("Email").fill(WL_EMAIL)
             page.get_by_label("Password").fill(WL_PASSWORD)
             page.get_by_role("button", name="Sign in").click()
             page.wait_for_load_state("networkidle", timeout=60000)
 
-            # 2) Navigate to the staff Add Client form
+            # 2) Navigate to the Staff dashboard
             page.goto(
-                "https://www.wellnessliving.com/rs/lead-add.html?k_business=314287&k_skin=202951",
-                timeout=60000,
-                wait_until="networkidle"
+                "https://www.wellnessliving.com/Wl/Staff/Location.html",
+                timeout=60000, wait_until="networkidle"
             )
-            page.wait_for_load_state("domcontentloaded", timeout=30000)
 
-            # 3) Fill out the “Add Client” modal
+            # 3) Click the "Add Client" button in the header
+            page.get_by_role("button", name="Add Client").click()
+
+            # 4) Wait for the "Add New Client" modal
+            page.wait_for_selector('text=Add New Client', timeout=30000)
+
+            # 5) Fill the fields
             page.get_by_placeholder("First name").fill(first_name)
             page.get_by_placeholder("Last name").fill(last_name)
             page.get_by_placeholder("Email").fill(email)
@@ -52,13 +53,16 @@ def handle_new_lead():
             if redemption:
                 page.get_by_placeholder("Redemption code").fill(redemption)
 
-            # 4) Select “R1SE @ Kelham” for Home location
+            # 6) Choose Home location from dropdown
             page.get_by_role("combobox", name="Home location") \
                 .select_option(label="R1SE @ Kelham")
 
-            # 5) Submit by clicking “Add”
+            # 7) Click the "Add" button to submit
             page.get_by_role("button", name="Add").click()
+
+            # Wait briefly for the modal to close
             page.wait_for_timeout(2000)
+
             browser.close()
 
         return jsonify({"status": "success", "submitted": email}), 200
