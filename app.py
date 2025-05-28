@@ -3,7 +3,7 @@ import traceback
 from flask import Flask, request, jsonify
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-# Credentials from Railway env vars
+# ← Make sure these are set in Railway Variables
 WL_EMAIL    = os.environ["WL_EMAIL"]
 WL_PASSWORD = os.environ["WL_PASSWORD"]
 
@@ -23,62 +23,48 @@ def handle_new_lead():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # 1) Login via the known template IDs
+            # 1) Login — redirect back to Staff dashboard
             page.goto(
-                "https://www.wellnessliving.com/login/r1se_yoga",
+                "https://www.wellnessliving.com/login?url_return=%2FWl%2FStaff%2FLocation.html",
                 timeout=60000,
                 wait_until="networkidle"
             )
             page.locator("#template-passport-login").fill(WL_EMAIL)
-            page.locator("#template-passport-login").press("Tab")
             page.locator("#template-passport-password").fill(WL_PASSWORD)
             page.locator("#passport_login_small span").click()
             page.wait_for_load_state("networkidle", timeout=60000)
 
-            # 2) Go to Staff dashboard
-            page.goto(
-                "https://www.wellnessliving.com/Wl/Staff/Location.html",
-                timeout=60000,
-                wait_until="networkidle"
-            )
-
-            # 3) Open Add Client
+            # 2) Click "Add Client"
             page.get_by_role("button", name="Add Client").wait_for(timeout=30000)
             page.get_by_role("button", name="Add Client").click()
+
+            # 3) Wait for modal
             page.wait_for_selector("text=Add New Client", timeout=30000)
 
-            # 4) Fill modal fields
-            page.wait_for_selector('input[placeholder="First name"]', timeout=30000)
-            page.fill('input[placeholder="First name"]', first_name)
-            page.wait_for_selector('input[placeholder="Last name"]', timeout=30000)
-            page.fill('input[placeholder="Last name"]', last_name)
-            page.wait_for_selector('input[placeholder="Email"]', timeout=30000)
-            page.fill('input[placeholder="Email"]', email)
-            page.wait_for_selector('input[placeholder="Cell phone"]', timeout=30000)
-            page.fill('input[placeholder="Cell phone"]', phone)
+            # 4) Fill the form
+            page.get_by_placeholder("First name").fill(first_name)
+            page.get_by_placeholder("Last name").fill(last_name)
+            page.get_by_placeholder("Email").fill(email)
+            page.get_by_placeholder("Cell phone").fill(phone)
             if redemption:
-                page.wait_for_selector('input[placeholder="Redemption code"]', timeout=30000)
-                page.fill('input[placeholder="Redemption code"]', redemption)
+                page.get_by_placeholder("Redemption code").fill(redemption)
 
             # 5) Select Home location
-            combo = page.get_by_role("combobox", name="Home location")
-            combo.wait_for(timeout=30000)
-            combo.select_option(label="R1SE @ Kelham")
+            page.get_by_role("combobox", name="Home location") \
+                .select_option(label="R1SE @ Kelham")
 
             # 6) Submit
-            button = page.get_by_role("button", name="Add")
-            button.wait_for(timeout=30000)
-            button.click()
-
+            page.get_by_role("button", name="Add").click()
             page.wait_for_timeout(2000)
+
             browser.close()
 
         return jsonify({"status": "success", "submitted": email}), 200
 
     except PWTimeout as e:
-        print("❌ Timeout during automation:", e)
+        print("❌ Timeout step:", e)
         traceback.print_exc()
-        return jsonify({"status": "error", "message": "Timeout"}), 504
+        return jsonify({"status": "error", "message": "Timeout during automation"}), 504
 
     except Exception as e:
         print("❌ Unexpected error:", e)
