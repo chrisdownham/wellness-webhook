@@ -3,7 +3,6 @@ import traceback
 from flask import Flask, request, jsonify
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-# ← Store these in Railway env vars (Settings → Variables)
 WL_EMAIL    = os.environ["WL_EMAIL"]
 WL_PASSWORD = os.environ["WL_PASSWORD"]
 
@@ -16,61 +15,95 @@ def handle_new_lead():
     last_name  = data.get("last_name", "")
     email      = data.get("email", "")
     phone      = data.get("phone", "")
-    redemption = data.get("redemption_code", "")  # optional
+    redemption = data.get("redemption_code", "")
 
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # 1) Login to custom staff login
-            page.goto(
-                "https://www.wellnessliving.com/login/r1se_yoga",
-                timeout=60000, wait_until="networkidle"
-            )
+            # Login
+            print("🔑 Navigating to login")
+            page.goto("https://www.wellnessliving.com/login/r1se_yoga",
+                      timeout=60000, wait_until="networkidle")
+            print("🔑 Filling email")
             page.get_by_label("Email").fill(WL_EMAIL)
+            print("🔑 Filling password")
             page.get_by_label("Password").fill(WL_PASSWORD)
+            print("🔑 Clicking Sign in")
             page.get_by_role("button", name="Sign in").click()
             page.wait_for_load_state("networkidle", timeout=60000)
 
-            # 2) Navigate to the Staff dashboard
-            page.goto(
-                "https://www.wellnessliving.com/Wl/Staff/Location.html",
-                timeout=60000, wait_until="networkidle"
-            )
+            # Go to Staff dashboard
+            print("📋 Navigating to Staff dashboard")
+            page.goto("https://www.wellnessliving.com/Wl/Staff/Location.html",
+                      timeout=60000, wait_until="networkidle")
 
-            # 3) Click the "Add Client" button in the header
+            # Click Add Client
+            print("➕ Waiting for Add Client button")
+            page.get_by_role("button", name="Add Client").wait_for(timeout=30000)
+            print("➕ Clicking Add Client")
             page.get_by_role("button", name="Add Client").click()
 
-            # 4) Wait for the "Add New Client" modal
+            # Wait for modal
+            print("📝 Waiting for Add New Client modal")
             page.wait_for_selector('text=Add New Client', timeout=30000)
 
-            # 5) Fill the fields
-            page.get_by_placeholder("First name").fill(first_name)
-            page.get_by_placeholder("Last name").fill(last_name)
-            page.get_by_placeholder("Email").fill(email)
-            page.get_by_placeholder("Cell phone").fill(phone)
+            # Fill First name
+            print("✍️ Waiting for First name input")
+            page.wait_for_selector('input[placeholder="First name"]', timeout=30000)
+            print("✍️ Filling First name")
+            page.fill('input[placeholder="First name"]', first_name)
+
+            # Fill Last name
+            print("✍️ Waiting for Last name input")
+            page.wait_for_selector('input[placeholder="Last name"]', timeout=30000)
+            print("✍️ Filling Last name")
+            page.fill('input[placeholder="Last name"]', last_name)
+
+            # Fill Email
+            print("✉️ Waiting for Email input")
+            page.wait_for_selector('input[placeholder="Email"]', timeout=30000)
+            print("✉️ Filling Email")
+            page.fill('input[placeholder="Email"]', email)
+
+            # Fill Cell phone
+            print("📱 Waiting for Cell phone input")
+            page.wait_for_selector('input[placeholder="Cell phone"]', timeout=30000)
+            print("📱 Filling Cell phone")
+            page.fill('input[placeholder="Cell phone"]', phone)
+
+            # Optional Redemption code
             if redemption:
-                page.get_by_placeholder("Redemption code").fill(redemption)
+                print("🔖 Waiting for Redemption code input")
+                page.wait_for_selector('input[placeholder="Redemption code"]', timeout=30000)
+                print("🔖 Filling Redemption code")
+                page.fill('input[placeholder="Redemption code"]', redemption)
 
-            # 6) Choose Home location from dropdown
-            page.get_by_role("combobox", name="Home location") \
-                .select_option(label="R1SE @ Kelham")
+            # Select Home location
+            print("🏠 Waiting for Home location dropdown")
+            combo = page.get_by_role("combobox", name="Home location")
+            combo.wait_for(timeout=30000)
+            print("🏠 Selecting R1SE @ Kelham")
+            combo.select_option(label="R1SE @ Kelham")
 
-            # 7) Click the "Add" button to submit
+            # Submit
+            print("✅ Waiting for Add button")
+            page.get_by_role("button", name="Add").wait_for(timeout=30000)
+            print("✅ Clicking Add")
             page.get_by_role("button", name="Add").click()
 
-            # Wait briefly for the modal to close
+            # Give it a moment
             page.wait_for_timeout(2000)
-
             browser.close()
 
+        print("🎉 Success for", email)
         return jsonify({"status": "success", "submitted": email}), 200
 
     except PWTimeout as e:
-        print("❌ Timeout during automation:", e)
+        print("❌ Timeout during step:", e)
         traceback.print_exc()
-        return jsonify({"status": "error", "message": "Timeout"}), 504
+        return jsonify({"status": "error", "message": "Timeout during automation"}), 504
 
     except Exception as e:
         print("❌ Unexpected error:", e)
