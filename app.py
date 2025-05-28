@@ -18,30 +18,37 @@ def handle_new_lead():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # Navigate with a higher timeout and wait until network is idle
+            # Navigate to the WellnessLiving lead form
             page.goto(
                 "https://www.wellnessliving.com/rs/lead-add.html?k_business=314287&k_skin=202951",
                 wait_until="networkidle",
                 timeout=60000
             )
 
-            # Fill the form
-            page.fill('input[name="first_name"]', first_name)
-            page.fill('input[name="last_name"]',  last_name)
-            page.fill('input[name="email"]',       email)
-            page.fill('input[name="phone"]',       phone)
+            # Fill out the form using placeholder selectors
+            page.wait_for_selector('input[placeholder="First Name"]', timeout=60000)
+            page.fill('input[placeholder="First Name"]', first_name)
 
-            # Submit
+            page.wait_for_selector('input[placeholder="Last Name"]', timeout=60000)
+            page.fill('input[placeholder="Last Name"]', last_name)
+
+            page.wait_for_selector('input[placeholder="Email"]', timeout=60000)
+            page.fill('input[placeholder="Email"]', email)
+
+            page.wait_for_selector('input[placeholder="Phone"]', timeout=60000)
+            page.fill('input[placeholder="Phone"]', phone)
+
+            # Submit the form
             page.click('button[type="submit"]')
+
             browser.close()
 
         return jsonify({"status": "success", "submitted": email}), 200
 
     except PWTimeout as e:
-        # Specific timeout logging
-        print("❌ Timeout navigating to form:", e)
+        print("❌ Timeout navigating or filling the form:", e)
         traceback.print_exc()
-        return jsonify({"status": "error", "message": "Navigation timeout"}), 504
+        return jsonify({"status": "error", "message": "Navigation or fill timeout"}), 504
 
     except Exception as e:
         print("❌ Error handling new lead:", e)
